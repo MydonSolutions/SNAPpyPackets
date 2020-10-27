@@ -47,27 +47,21 @@ class SNAPPacket(object):
                  fEngineId: int = None,
                  sampleNumber: int = None,
                  samples: [int] = None,
-                 bytes: bytearray = None,
+                 packetBytes: bytearray = None,
                  byteorder: str = 'big'
                  ):
         
-        if bytes is not None:
-            self.fwVersion = int.from_bytes((bytes[0:1]), byteorder=byteorder)
-            self.packetType = int.from_bytes((bytes[1:2]), byteorder=byteorder)
-            self.channels = int.from_bytes((bytes[2:4]), byteorder=byteorder)
-            self.channelNum = int.from_bytes((bytes[4:6]), byteorder=byteorder)
-            self.fEngineId = int.from_bytes((bytes[6:8]), byteorder=byteorder)
-            self.sampleNumber = int.from_bytes((bytes[8:24]), byteorder=byteorder)
-            self.samplesHex = bytes[24:].hex()
+        if packetBytes is not None:
+            self.headerBytes = packetBytes[0:16]
 
-            self.headerHex = [
-                bytes[0:1].hex(),
-                bytes[1:2].hex(),
-                bytes[2:4].hex(),
-                bytes[4:6].hex(),
-                bytes[6:8].hex(),
-                bytes[8:24].hex()
-            ]
+            self.fwVersion = int.from_bytes(self.headerBytes[0:1], byteorder=byteorder)
+            self.packetType = int.from_bytes(self.headerBytes[1:2], byteorder=byteorder)
+            self.channels = int.from_bytes(self.headerBytes[2:4], byteorder=byteorder)
+            self.channelNum = int.from_bytes(self.headerBytes[4:6], byteorder=byteorder)
+            self.fEngineId = int.from_bytes(self.headerBytes[6:8], byteorder=byteorder)
+            self.sampleNumber = int.from_bytes(self.headerBytes[8:16], byteorder=byteorder)
+            self.samplesBytes = packetBytes[16:]
+
         else:
             self.fwVersion = fwVersion & mask8bits
             self.packetType = (1 if packetType else 0) & mask8bits
@@ -75,20 +69,30 @@ class SNAPPacket(object):
             self.channelNum = channelNum & mask16bits
             self.fEngineId = fEngineId & mask16bits
             self.sampleNumber = sampleNumber & mask64bits
-            self.samplesHex = [format(sample & mask4bits, 'x')
-                            for sample in samples]
+            self.samplesBytes = bytes([((samples[sampleI] & mask4bits) << 4) + (samples[sampleI+1] & mask4bits)
+                                       for sampleI in range(0, len(samples), 2)])
 
-            self.headerHex = [
-                format(self.fwVersion, 'x').zfill(2),
-                format(self.packetType, 'x').zfill(2),
-                format(self.channels, 'x').zfill(4),
-                format(self.channelNum, 'x').zfill(4),
-                format(self.fEngineId, 'x').zfill(4),
-                format(self.sampleNumber, 'x').zfill(16)
-            ]
+            self.headerBytes = bytes([
+                self.fwVersion,
+                self.packetType,
+                (self.channels >> 8) & mask8bits,
+                self.channels & mask8bits,
+                (self.channelNum >> 8) & mask8bits,
+                self.channelNum & mask8bits,
+                (self.fEngineId >> 8) & mask8bits,
+                self.fEngineId & mask8bits,
+                (self.sampleNumber >> 56) & mask8bits,
+                (self.sampleNumber >> 48) & mask8bits,
+                (self.sampleNumber >> 40) & mask8bits,
+                (self.sampleNumber >> 32) & mask8bits,
+                (self.sampleNumber >> 24) & mask8bits,
+                (self.sampleNumber >> 16) & mask8bits,
+                (self.sampleNumber >> 8) & mask8bits,
+                self.sampleNumber & mask8bits
+            ])
 
-    def toBytes(self):
-        return bytes.fromhex(''.join(self.headerHex + self.samplesHex))
+    def packet(self):
+        return self.headerBytes + self.samplesBytes
     
     def print(self):
         print(self.str())
@@ -106,7 +110,7 @@ class SNAPPacket(object):
                                         self.channelNum,
                                         self.fEngineId,
                                         self.sampleNumber,
-                                        self.samplesHex)
+                                        self.samplesBytes)
 
 if __name__ == '__main__':
     testPacket = SNAPPacket(
@@ -118,6 +122,9 @@ if __name__ == '__main__':
         3735928559,
         [i % 16 for i in range(16*2*2)]
     )
-    testPacketBytes = testPacket.toBytes()
+    testPacketBytes = testPacket.packet()
+    dupPacket = SNAPPacket(packetBytes=testPacketBytes)
+    dupPacket.print()
+    dupPacketBytes = dupPacket.packet()
     print(testPacketBytes)
-    SNAPPacket(bytes=testPacketBytes).print()
+    print(dupPacketBytes)
