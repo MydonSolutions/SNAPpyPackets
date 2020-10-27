@@ -40,36 +40,73 @@ class SNAPPacket(object):
     """
 
     def __init__(self,
-                 fwVersion: int,
-                 packetType: bool,
-                 channels: int,
-                 channelNum: int,
-                 fEngineId: int,
-                 sampleNumber: int,
-                 samples  # : List<List<int, int>>
+                 fwVersion: int = None,
+                 packetType: bool = None,
+                 channels: int = None,
+                 channelNum: int = None,
+                 fEngineId: int = None,
+                 sampleNumber: int = None,
+                 samples: [int] = None,
+                 bytes: bytearray = None,
+                 byteorder: str = 'big'
                  ):
+        
+        if bytes is not None:
+            self.fwVersion = int.from_bytes((bytes[0:1]), byteorder=byteorder)
+            self.packetType = int.from_bytes((bytes[1:2]), byteorder=byteorder)
+            self.channels = int.from_bytes((bytes[2:4]), byteorder=byteorder)
+            self.channelNum = int.from_bytes((bytes[4:6]), byteorder=byteorder)
+            self.fEngineId = int.from_bytes((bytes[6:8]), byteorder=byteorder)
+            self.sampleNumber = int.from_bytes((bytes[8:24]), byteorder=byteorder)
+            self.samplesHex = bytes[24:].hex()
 
-        self.fwVersion = fwVersion & mask8bits
-        self.packetType = (1 if packetType else 0) & mask8bits
-        self.channels = channels & mask16bits
-        self.channelNum = channelNum & mask16bits
-        self.fEngineId = fEngineId & mask16bits
-        self.sampleNumber = sampleNumber & mask64bits
-        self.samplesHex = [format(sample & mask4bits, 'x')
-                           for sample in samples]
+            self.headerHex = [
+                bytes[0:1].hex(),
+                bytes[1:2].hex(),
+                bytes[2:4].hex(),
+                bytes[4:6].hex(),
+                bytes[6:8].hex(),
+                bytes[8:24].hex()
+            ]
+        else:
+            self.fwVersion = fwVersion & mask8bits
+            self.packetType = (1 if packetType else 0) & mask8bits
+            self.channels = channels & mask16bits
+            self.channelNum = channelNum & mask16bits
+            self.fEngineId = fEngineId & mask16bits
+            self.sampleNumber = sampleNumber & mask64bits
+            self.samplesHex = [format(sample & mask4bits, 'x')
+                            for sample in samples]
 
-        self.headerHex = [
-            format(self.fwVersion, 'x').zfill(2),
-            format(self.packetType, 'x').zfill(2),
-            format(self.channels, 'x').zfill(4),
-            format(self.channelNum, 'x').zfill(4),
-            format(self.fEngineId, 'x').zfill(4),
-            format(self.sampleNumber, 'x').zfill(16)
-        ]
+            self.headerHex = [
+                format(self.fwVersion, 'x').zfill(2),
+                format(self.packetType, 'x').zfill(2),
+                format(self.channels, 'x').zfill(4),
+                format(self.channelNum, 'x').zfill(4),
+                format(self.fEngineId, 'x').zfill(4),
+                format(self.sampleNumber, 'x').zfill(16)
+            ]
 
-    def hex(self):
+    def toBytes(self):
         return bytes.fromhex(''.join(self.headerHex + self.samplesHex))
+    
+    def print(self):
+        print(self.str())
 
+    def str(self):
+        return """Firmware Version: {}
+            \rPacket type: {}
+            \rNumber of Channels: {}
+            \rChannel number: {}
+            \rAntenna ID: {}
+            \rSample number: {}
+            \rSamples (0x): {}\n""".format(self.fwVersion,
+                                        self.packetType,
+                                        self.channels,
+                                        self.channelNum,
+                                        self.fEngineId,
+                                        self.sampleNumber,
+                                        self.samplesHex)
 
 if __name__ == '__main__':
     testPacket = SNAPPacket(
@@ -78,7 +115,9 @@ if __name__ == '__main__':
         2,
         2,
         0,
-        0,
-        [i for i in range(16*2*2)]
+        3735928559,
+        [i % 16 for i in range(16*2*2)]
     )
-    print(testPacket.hex())
+    testPacketBytes = testPacket.toBytes()
+    print(testPacketBytes)
+    SNAPPacket(bytes=testPacketBytes).print()
