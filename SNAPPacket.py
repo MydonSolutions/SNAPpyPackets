@@ -110,7 +110,7 @@ class SNAPPacket(object):
                                         self.channelNum,
                                         self.fEngineId,
                                         self.sampleNumber,
-                                        self.samplesBytes)
+                                        [complex((i>>4), i & mask4bits) for i in self.samplesBytes])
 
 if __name__ == '__main__':
     testPacket = SNAPPacket(
