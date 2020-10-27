@@ -10,6 +10,7 @@ class SNAPPacket(object):
     ATA SNAP Firmware Manual, Release 2.0.0
     ---------------------------------------
     Section 2.3.2 "Output Data Formats: Voltage Packets", pg 5
+    https://github.com/realtimeradio/ata_snap/blob/nov-observing/docs/manual.pdf
 
     struct voltage_packet {
         uint8_t version;
