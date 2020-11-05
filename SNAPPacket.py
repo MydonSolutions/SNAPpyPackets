@@ -64,7 +64,7 @@ class SNAPPacket(object):
 
         else:
             self.fwVersion = fwVersion & mask8bits
-            self.packetType = (1 if packetType else 0) & mask8bits
+            self.packetType = (3 if packetType else 0) & mask8bits
             self.channels = channels & mask16bits
             self.channelNum = channelNum & mask16bits
             self.fEngineId = fEngineId & mask16bits
@@ -72,7 +72,41 @@ class SNAPPacket(object):
             self.samplesBytes = bytes([((samples[sampleI] & mask4bits) << 4) + (samples[sampleI+1] & mask4bits)
                                        for sampleI in range(0, len(samples), 2)])
 
-            self.headerBytes = bytes([
+            self.updateHeaderBytes()
+
+    def packet(self):
+        return self.headerBytes + self.samplesBytes
+    
+    def print(self, headerOnly=False):
+        if headerOnly:
+            print(self.headerStr())
+        else:
+            print(self.str())
+
+    def twosCompliment(self, value, bits):
+        return value if value < (1<<(bits-1)) else (value % (1<<(bits-1))) - (1<<(bits-1))
+
+    def str(self):
+        return """{}
+            \rSamples (0x): {}""".format(self.headerStr(),
+                                        [complex(self.twosCompliment(i>>4, 4) , self.twosCompliment(i & mask4bits, 4)) 
+                                        for i in self.samplesBytes])
+
+    def headerStr(self):
+        return """Firmware Version: {}
+            \rPacket type: {}
+            \rNumber of Channels: {}
+            \rChannel number: {}
+            \rAntenna ID: {}
+            \rSample number: {}""".format(self.fwVersion,
+                                        self.packetType,
+                                        self.channels,
+                                        self.channelNum,
+                                        self.fEngineId,
+                                        self.sampleNumber)
+
+    def updateHeaderBytes(self):
+        self.headerBytes = bytes([
                 self.fwVersion,
                 self.packetType,
                 (self.channels >> 8) & mask8bits,
@@ -90,27 +124,6 @@ class SNAPPacket(object):
                 (self.sampleNumber >> 8) & mask8bits,
                 self.sampleNumber & mask8bits
             ])
-
-    def packet(self):
-        return self.headerBytes + self.samplesBytes
-    
-    def print(self):
-        print(self.str())
-
-    def str(self):
-        return """Firmware Version: {}
-            \rPacket type: {}
-            \rNumber of Channels: {}
-            \rChannel number: {}
-            \rAntenna ID: {}
-            \rSample number: {}
-            \rSamples (0x): {}\n""".format(self.fwVersion,
-                                        self.packetType,
-                                        self.channels,
-                                        self.channelNum,
-                                        self.fEngineId,
-                                        self.sampleNumber,
-                                        [complex((i>>4), i & mask4bits) for i in self.samplesBytes])
 
 if __name__ == '__main__':
     testPacket = SNAPPacket(
