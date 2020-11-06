@@ -48,7 +48,8 @@ class SNAPPacket(object):
                  sampleNumber: int = None,
                  samples: [int] = None,
                  packetBytes: bytearray = None,
-                 byteorder: str = 'big'
+                 byteorder: str = 'big',
+                 sampleBitWidth: int = 4
                  ):
         
         if packetBytes is not None:
@@ -60,22 +61,72 @@ class SNAPPacket(object):
             self.channelNum = int.from_bytes(self.headerBytes[4:6], byteorder=byteorder)
             self.fEngineId = int.from_bytes(self.headerBytes[6:8], byteorder=byteorder)
             self.sampleNumber = int.from_bytes(self.headerBytes[8:16], byteorder=byteorder)
-            self.samplesBytes = packetBytes[16:]
+            self.sampleBytes = packetBytes[16:]
 
         else:
-            self.fwVersion = fwVersion & mask8bits
-            self.packetType = (3 if packetType else 0) & mask8bits
-            self.channels = channels & mask16bits
-            self.channelNum = channelNum & mask16bits
-            self.fEngineId = fEngineId & mask16bits
-            self.sampleNumber = sampleNumber & mask64bits
-            self.samplesBytes = bytes([((samples[sampleI] & mask4bits) << 4) + (samples[sampleI+1] & mask4bits)
-                                       for sampleI in range(0, len(samples), 2)])
+            if not self.setHeader(fwVersion, packetType, channels, channelNum, fEngineId, sampleNumber):
+                return None
+            self.setSamples(samples, sampleBitWidth, mask4bits if sampleBitWidth == 4 else mask8bits)
 
-            self.updateHeaderBytes()
+    def setHeader(self,
+                  fwVersion: int = None,
+                  packetType: bool = None,
+                  channels: int = None,
+                  channelNum: int = None,
+                  fEngineId: int = None,
+                  sampleNumber: int = None,
+                  update: bool = False
+                  ):
+        
+        notAllArgs = False
+
+        if fwVersion is not None:
+            self.fwVersion = fwVersion & mask8bits
+        else:
+            notAllArgs = True
+
+        if packetType is not None:
+            self.packetType = (3 if packetType else 0) & mask8bits
+        else:
+            notAllArgs = True
+
+        if channels is not None:
+            self.channels = channels & mask16bits
+        else:
+            notAllArgs = True
+
+        if channelNum is not None:
+            self.channelNum = channelNum & mask16bits
+        else:
+            notAllArgs = True
+
+        if fEngineId is not None:
+            self.fEngineId = fEngineId & mask16bits
+        else:
+            notAllArgs = True
+
+        if sampleNumber is not None:
+            self.sampleNumber = sampleNumber & mask64bits
+        else:
+            notAllArgs = True
+        
+        if notAllArgs and not update:
+            print("Please provide all of the header's arguments.");
+            return False
+
+        self.updateHeaderBytes()
+        return True
+
+    def setSamples(self, samples, bitwidth=4, mask=mask4bits):
+        if bitwidth == 4:
+            self.sampleBytes = bytes([((samples[sampleI] & mask) << bitwidth) + (samples[sampleI+1] & mask)
+                                        for sampleI in range(0, len(samples), 2)])
+        elif bitwidth == 8 and mask == mask8bits:
+            self.sampleBytes = bytes([samples[sampleI] & mask
+                                        for sampleI in range(0, len(samples), 1)])
 
     def packet(self):
-        return self.headerBytes + self.samplesBytes
+        return self.headerBytes + self.sampleBytes
     
     def print(self, headerOnly=False):
         if headerOnly:
@@ -90,7 +141,7 @@ class SNAPPacket(object):
         return """{}
             \rSamples (0x): {}""".format(self.headerStr(),
                                         [complex(self.twosCompliment(i>>4, 4) , self.twosCompliment(i & mask4bits, 4)) 
-                                        for i in self.samplesBytes])
+                                        for i in self.sampleBytes])
 
     def headerStr(self):
         return """Firmware Version: {}
@@ -104,6 +155,18 @@ class SNAPPacket(object):
                                         self.channelNum,
                                         self.fEngineId,
                                         self.sampleNumber)
+    def update(self,
+               fwVersion: int = None,
+               packetType: bool = None,
+               channels: int = None,
+               channelNum: int = None,
+               fEngineId: int = None,
+               sampleNumber: int = None,
+               samples: [int] = None
+               ):
+        self.setHeader(fwVersion, packetType, channels, channelNum, fEngineId, sampleNumber, update=True)
+        if samples is not None:
+            self.setSamples(samples)
 
     def updateHeaderBytes(self):
         self.headerBytes = bytes([
