@@ -11,8 +11,8 @@ sock = socket.socket(socket.AF_INET, # Internet
 sock.bind((UDP_IP, UDP_PORT))
 
 while True:
-    data, addr = sock.recvfrom(8192) # buffer size is 8192 bytes
-    print("received message: %s" % data)
-    SNAPPacket(packetBytes = data).print()
-    if "n" in input("Continue (Y/n)? "):
-      break
+    data, addr = sock.recvfrom(8192+16) # buffer size is 8192 bytes
+    # print("received message: %s" % data)
+    SNAPPacket(packetBytes = data).print(True)
+    # if "n" in input("Continue (Y/n)? "):
+    #   break
